@@ -1,4 +1,6 @@
 import json
+import os
+
 from selenium import webdriver
 
 
@@ -32,6 +34,9 @@ if __name__ == '__main__':
     # Creating browser object
     options = webdriver.ChromeOptions()
     browser = webdriver.Chrome(options=options)
+
+    if not os.path.exists("cookies"):
+        os.mkdir("cookies")
 
     browser.get("https://scrap.tf/login")
     input()
