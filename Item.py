@@ -8,13 +8,13 @@ from parseScrap import _load_cookies
 class BuyItems:
     def __init__(self):
         self.items = []
+        self.purchased_items = []
         options = webdriver.ChromeOptions()
         options.headless()
         self.brow = webdriver.Chrome(chrome_options=options)
         self.brow.get("https://scrap.tf")
         _load_cookies(self.brow, "cookies/cookiesScrap")
         self.brow.get("https://scrap.tf/buy/hats")
-    # TODO add additions to the SellItems class after purchasing the item
 
     def add_item(self, name="Marxman", price='15', count=1, color=''):
         self.items.append({'name': name,
@@ -22,13 +22,25 @@ class BuyItems:
                            'count': count,
                            'painted': color})
 
+    def _add_purchased_item(self, name, count, color):
+        self.purchased_items.append({{'name': name,
+                                      'count': count,
+                                      'painted': color}})
+
+    def get_purchased_items(self):
+        return self.purchased_items
+
     def buy(self, count_items=1):
         if self.brow.current_url != 'https://scrap.tf/buy/hats':
             self.brow.get('https://scrap.tf/buy/hats')
-        sequence_number = self._find_item()
-        if sequence_number > 0:
-            for i in range(self.items[0]['count']):
-                self.brow.find_element_by_xpath('//*[@id="category-2"]/div/div[' + str(sequence_number) + ']').click()
+        item_parameters = self._find_item()
+        if item_parameters[0] > 0:
+            for i in range(
+                    item_parameters[1] if self.items[0]['count'] > item_parameters[1] else self.items[0]['count']):
+                self.brow.find_element_by_xpath(
+                    '//*[@id="category-2"]/div/div[' + str(item_parameters[1]) + ']').click()
+            item_parameters = self._find_item()
+            self._add_purchased_item(self.items[0]['name'], item_parameters[3], self.items[0]['color'])
         del self.items[0]
         if count_items > 1:
             return self.buy(count_items - 1)
@@ -51,7 +63,7 @@ class BuyItems:
             if self.items[0]['name'] == str(name if len(span) == 0 else span[0].contents[0]) and \
                     self.items[0]['price'] == item['data-item-value'] and \
                     self.items[0]['painted'] == str('' if len(painted) == 0 else painted[0].removeprefix('Painted ')):
-                return sequence_number
+                return [sequence_number, int(item['data-num-available']), int(item['data-num-selected'])]
             else:
                 sequence_number += 1
         return 0
