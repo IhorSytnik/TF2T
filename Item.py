@@ -1,7 +1,7 @@
 import json
 
-from selenium import webdriver
 from bs4 import BeautifulSoup as Bs
+from selenium import webdriver
 
 from parseScrap import _load_cookies
 
@@ -10,29 +10,35 @@ class BuyItems:
     def __init__(self):
         self.items = []
         options = webdriver.ChromeOptions()
+        options.headless()
         self.brow = webdriver.Chrome(chrome_options=options)
         self.brow.get("https://scrap.tf")
         _load_cookies(self.brow, "cookies/cookiesScrap")
         self.brow.get("https://scrap.tf/buy/hats")
 
-    def add_item(self, name, price, count, marketplace):
+    def add_item(self, name="Marxman", price='15', count=1, color=''):
         self.items.append({'name': name,
                            'price': price,
                            'count': count,
-                           'painted': marketplace})
+                           'painted': color})
 
-    def buy_item(self):
+    def buy(self, count_items=1):
         self.brow.get('https://scrap.tf/buy/hats')
-        sequence_number = self.find_item()
+        sequence_number = self._find_item()
         if sequence_number > 0:
-            self.send_tradeScrap(sequence_number)
+            self._send_tradeScrap(sequence_number,self.items[0]['count'])
         del self.items[0]
+        if count_items > 0:
+            return self.buy(count_items - 1)
 
-    def send_tradeScrap(self, number):
-        self.brow.get('https://scrap.tf/buy/hats')
-        self.brow.find_element_by_xpath('//*[@id="category-2"]/div/div[' + str(number) + ']').click()
-        self.brow.find_element_by_xpath('//*[@id="trade-btn"]/i').click()
-    def find_item(self):
+    def _send_tradeScrap(self, position=1, count=1):
+        self.brow.find_element_by_xpath('//*[@id="category-2"]/div/div[' + str(position) + ']').click()
+        if count == 1:
+            self.brow.find_element_by_xpath('//*[@id="trade-btn"]/i').click()
+        else:
+            self._send_tradeScrap(position, count-1)
+
+    def _find_item(self):
         html = self.brow.page_source
         html = Bs(html, 'html.parser')
         html = html.find('div', attrs={"id": "category-2"}).find('div', attrs={"class": "items-container"})
@@ -87,4 +93,4 @@ class SellItems:
 if __name__ == '__main__':
     item_list = BuyItems()
     item_list.add_item("Marxman", '15', 1, '')
-    item_list.buy_item()
+    item_list.buy()
