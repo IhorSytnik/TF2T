@@ -2,7 +2,6 @@ import json
 
 from bs4 import BeautifulSoup as Bs
 from selenium import webdriver
-
 from parseScrap import _load_cookies
 
 
@@ -15,6 +14,7 @@ class BuyItems:
         self.brow.get("https://scrap.tf")
         _load_cookies(self.brow, "cookies/cookiesScrap")
         self.brow.get("https://scrap.tf/buy/hats")
+    # TODO add additions to the SellItems class after purchasing the item
 
     def add_item(self, name="Marxman", price='15', count=1, color=''):
         self.items.append({'name': name,
@@ -23,20 +23,18 @@ class BuyItems:
                            'painted': color})
 
     def buy(self, count_items=1):
-        self.brow.get('https://scrap.tf/buy/hats')
+        if self.brow.current_url != 'https://scrap.tf/buy/hats':
+            self.brow.get('https://scrap.tf/buy/hats')
         sequence_number = self._find_item()
         if sequence_number > 0:
-            self._send_tradeScrap(sequence_number,self.items[0]['count'])
+            for i in range(self.items[0]['count']):
+                self.brow.find_element_by_xpath('//*[@id="category-2"]/div/div[' + str(sequence_number) + ']').click()
         del self.items[0]
-        if count_items > 0:
+        if count_items > 1:
             return self.buy(count_items - 1)
 
-    def _send_tradeScrap(self, position=1, count=1):
-        self.brow.find_element_by_xpath('//*[@id="category-2"]/div/div[' + str(position) + ']').click()
-        if count == 1:
-            self.brow.find_element_by_xpath('//*[@id="trade-btn"]/i').click()
-        else:
-            self._send_tradeScrap(position, count-1)
+        self.brow.find_element_by_xpath('//*[@id="trade-btn"]/i').click()
+        # TODO add accepting with Steam
 
     def _find_item(self):
         html = self.brow.page_source
@@ -57,6 +55,7 @@ class BuyItems:
             else:
                 sequence_number += 1
         return 0
+    # TODO refactor _find_items (find better way of finding items)
 
 
 class SellItems:
