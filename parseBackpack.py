@@ -7,16 +7,18 @@ import urllib.parse
 import re
 
 # Price cap in ref over which this parser can't go
-price_cap = 100000
+price_capacity = 100000
 # Key price in ref
-key_price = 59
+key_price_ref = 59
 
 
-def parse_backpack(browser):
+def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -> list[dict]:
     """
     Parses Backpack.tf, compares with data from Scrap.tf and then returns sorted dictionary of items that have a
     positive ( and not 0) difference in price
 
+    :param key_price: Key price in ref
+    :param price_cap: Price cap in ref over which this parser can't go
     :param browser: WebDriver object
     :return: compared_items - list of sorted by diff item dictionaries that looks like this:
             item = {
