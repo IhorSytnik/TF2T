@@ -8,7 +8,7 @@ import cookieOperations as Cop
 # 1 - Strange Hats
 # 2 - Higher-Value Hats
 # 3 - Craft Hats
-category = 2
+category_number = 2
 
 
 class Quality(Enum):
@@ -106,10 +106,15 @@ def get_quality(number):
         return
 
 
-def parse_scrap(browser) -> list[dict]:
+def parse_scrap(browser, category=category_number) -> list[dict]:
     """
     Parses Scrap.tf and then returns dictionary of items
 
+    :param category: category to parse on scrap.tf:
+        0 - Recently Traded
+        1 - Strange Hats
+        2 - Higher-Value Hats
+        3 - Craft Hats
     :param browser: WebDriver object
     :return: items - list of item dictionaries that looks like this:
             item = {
