@@ -1,4 +1,6 @@
 import json
+import time
+from telnetlib import EC
 
 from bs4 import BeautifulSoup as Bs
 from selenium import webdriver
@@ -23,9 +25,9 @@ class BuyItems:
                            'painted': color})
 
     def _add_purchased_item(self, name, count, color):
-        self.purchased_items.append({{'name': name,
-                                      'count': count,
-                                      'painted': color}})
+        self.purchased_items.append({'name': name,
+                                     'count': count,
+                                     'painted': color})
 
     def get_purchased_items(self):
         return self.purchased_items
@@ -34,18 +36,27 @@ class BuyItems:
         if self.brow.current_url != 'https://scrap.tf/buy/hats':
             self.brow.get('https://scrap.tf/buy/hats')
         item_parameters = self._find_item()
-        if item_parameters[0] > 0:
+        if int(item_parameters[0]) > 0:
             for i in range(
                     item_parameters[1] if self.items[0]['count'] > item_parameters[1] else self.items[0]['count']):
                 self.brow.find_element_by_xpath(
-                    '//*[@id="category-2"]/div/div[' + str(item_parameters[1]) + ']').click()
+                    '//*[@id="category-2"]/div/div[' + str(item_parameters[0]) + ']').click()
             item_parameters = self._find_item()
-            self._add_purchased_item(self.items[0]['name'], item_parameters[3], self.items[0]['color'])
+            self._add_purchased_item(self.items[0]['name'], item_parameters[2], self.items[0]['painted'])
         del self.items[0]
         if count_items > 1:
             return self.buy(count_items - 1)
 
         self.brow.find_element_by_xpath('//*[@id="trade-btn"]/i').click()
+        time.sleep(30)
+        self.brow.find_element_by_xpath('//*[@id="pid-hats"]/div[3]/div/div[2]/div[2]/button[2]').click()
+        self.brow.switch_to.window(self.brow.window_handles[1])
+        self.brow.find_element_by_xpath('//*[@id="you_notready"]/div/text()').click()
+        self.brow.find_element_by_xpath('//*[@id="trade_confirmbtn_text"]').click()
+        time.sleep(2)
+        self.brow.close()
+        self.brow.switch_to.window(self.brow.window_handles[0])
+
         # TODO add accepting with Steam
 
     def _find_item(self):
@@ -66,7 +77,7 @@ class BuyItems:
                 return [sequence_number, int(item['data-num-available']), int(item['data-num-selected'])]
             else:
                 sequence_number += 1
-        return 0
+        return [0, 0, 0]
     # TODO refactor _find_items (find better way of finding items)
 
 
@@ -103,5 +114,5 @@ class SellItems:
 
 if __name__ == '__main__':
     item_list = BuyItems()
-    item_list.add_item("Marxman", '15', 1, '')
+    item_list.add_item("Made Man", '15', 1, '')
     item_list.buy()
