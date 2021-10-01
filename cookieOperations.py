@@ -46,4 +46,8 @@ if __name__ == '__main__':
     input()
     save_cookie(browser, "cookies/cookiesBackpack")
 
+    browser.get("https://steamcommunity.com/")
+    input()
+    save_cookie(browser, "cookies/cookiesSteam")
+
     browser.close()
