@@ -9,7 +9,7 @@ import re
 # Price cap in ref over which this parser can't go
 price_capacity = 100000
 # Key price in ref
-key_price_ref = 59
+key_price_ref = 60
 
 
 def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -> list[dict]:
@@ -103,9 +103,14 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -
                         .find('div')
                     if description.has_attr('data-quality_elevated'):
                         continue
-                    if description.has_attr('data-paint_name'):
-                        if description['data-paint_name'] != item['painted']:
+                    if item['painted']:
+                        if description.has_attr('data-paint_name'):
+                            if description['data-paint_name'] != item['painted']:
+                                continue
+                        else:
                             continue
+                    elif description.has_attr('data-paint_name'):
+                        continue
                     keys = 0
                     refs = 0
                     price_str = description['data-listing_price']
@@ -149,7 +154,7 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -
                     else:
                         continue
 
-                    diff_metal = int(keys) * key_price * 9 + math.trunc(float(refs)) * 9 + \
+                    diff_metal = int(keys) * (math.trunc(float(key_price)) * 9 + int(math.trunc((float(key_price) * 10)) % 10)) + math.trunc(float(refs)) * 9 + \
                         int(math.trunc((float(refs) * 10)) % 10) - float(item['price_scrap'])
 
                     if diff_metal >= 1:

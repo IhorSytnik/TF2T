@@ -8,7 +8,7 @@ import cookieOperations as Cop
 # 1 - Strange Hats
 # 2 - Higher-Value Hats
 # 3 - Craft Hats
-category_number = 2
+category_number = 1
 
 
 class Quality(Enum):
@@ -26,7 +26,7 @@ class Quality(Enum):
     GENUINE = "Genuine", 1
     STRANGE = "Strange", 11
     UNUSUAL = "Unusual", 5
-    HAUNTED = "Haunted"
+    HAUNTED = "Haunted", 13
     COLLECTORS = "Collector's"
     DECORATED = "Decorated", 15
     COMMUNITY = "Community"
@@ -102,6 +102,8 @@ def get_quality(number):
         return "Unusual"
     elif number == 15:
         return "Decorated"
+    elif number == 13:
+        return "Haunted"
     else:
         return
 
@@ -154,6 +156,7 @@ def parse_scrap(browser, category=category_number) -> list[dict]:
     browser.get("https://scrap.tf")
     Cop.load_cookies(browser, "cookies/cookiesScrap")
     browser.get("https://scrap.tf/buy/hats")
+    # browser.get("https://scrap.tf/buy/items")
 
     # Getting all item divs from web site
     html = browser.page_source
