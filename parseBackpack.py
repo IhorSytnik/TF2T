@@ -7,17 +7,35 @@ import urllib.parse
 import re
 
 # Price cap in ref over which this parser can't go
-price_capacity = 100000
-# Key price in ref
-key_price_ref = 60
+price_capacity = 1000
+# Key buying sell price in ref (should be set as the selling price on backpack.tf (*Amount they pay us))
+key_sell_price_ref = 70.00
 
 
-def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -> list[dict]:
+def print_key_price_n_price_cap():
+    scraps_cap = price_capacity % 9
+    refs_cap = (price_capacity - scraps_cap) / 9
+    ref_full_cap = int((refs_cap + (scraps_cap * 11) / 100) * 100) / 100
+
+    keys_cap = math.trunc(ref_full_cap / key_sell_price_ref) if ref_full_cap >= key_sell_price_ref else 0
+    diff_metal_cap_for_keys = float(price_capacity) - int(keys_cap) * (math.trunc(float(key_sell_price_ref)) * 9 + int(
+        math.trunc((float(key_sell_price_ref) * 10)) % 10))
+    scraps_cap_for_keys = diff_metal_cap_for_keys % 9
+    refs_cap_for_keys = (diff_metal_cap_for_keys - scraps_cap_for_keys) / 9
+    ref_full_cap_for_keys = int((refs_cap_for_keys + (scraps_cap_for_keys * 11) / 100) * 100) / 100
+
+    parseScrap.print_key_price_n_category()
+    print(f"price cap = {price_capacity} metal = {ref_full_cap:.2f} refs = {keys_cap} keys, "
+          f"{ref_full_cap_for_keys:.2f} refs")
+    print(f"key selling price ref = {key_sell_price_ref:.2f}")
+
+
+def parse_backpack(browser, price_cap=price_capacity, key_price=key_sell_price_ref) -> list[dict]:
     """
     Parses Backpack.tf, compares with data from Scrap.tf and then returns sorted dictionary of items that have a
     positive ( and not 0) difference in price
 
-    :param key_price: Key price in ref
+    :param key_price: Key buying sell price in ref (should be set as the selling price on backpack.tf (*Amount they pay us))
     :param price_cap: Price cap in ref over which this parser can't go
     :param browser: WebDriver object
     :return: compared_items - list of sorted by diff item dictionaries that looks like this:
@@ -26,6 +44,7 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -
                 'name_base': item name without quality,
                 'price_scrap': price in scrap metal on scrap.tf,
                 'price_scrap_ref': price in ref on scrap.tf,
+                'price_scrap_full': full price on scrap.tf in keys and refs,
                 'painted': paint name if painted,
                 'quality_name': quality name,
                 'quality': quality number,
@@ -41,6 +60,7 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -
                 'name_base': 'Two Punch Mann',
                 'price_scrap': 27,
                 'price_scrap_ref': 3.0,
+                'price_scrap_full': '0 keys, 3.0 refs',
                 'painted': '',
                 'quality_name': 'Unique',
                 'quality': 6,
@@ -78,8 +98,8 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -
 
             if end_one:
                 break
-            browser.get("https://backpack.tf/classifieds?page=" + str(page_num) + "&item=" + url +
-                        "&quality=" + str(item['quality']) + "&tradable=1&craftable=1&australium=-1&killstreak_tier=0")
+            browser.get(f"https://backpack.tf/classifieds?page={page_num}&item={url}&quality={item['quality']}"
+                        f"&tradable=1&craftable=1&australium=-1&killstreak_tier=0")
 
             item_list = Bs(browser.page_source, 'html.parser') \
                 .find('main', attrs={"id": "page-content"}) \
@@ -154,8 +174,11 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -
                     else:
                         continue
 
-                    diff_metal = int(keys) * (math.trunc(float(key_price)) * 9 + int(math.trunc((float(key_price) * 10)) % 10)) + math.trunc(float(refs)) * 9 + \
-                        int(math.trunc((float(refs) * 10)) % 10) - float(item['price_scrap'])
+                    diff_metal = int(keys) * (math.trunc(float(key_price)) * 9 +
+                        int(math.trunc((float(key_price) * 10)) % 10)) + \
+                        math.trunc(float(refs)) * 9 + \
+                        int(math.trunc((float(refs) * 10)) % 10) - \
+                        float(item['price_scrap'])
 
                     if diff_metal >= 1:
                         diff_scraps = diff_metal % 9
@@ -165,6 +188,9 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -
                         item['price_backpack_refs'] = refs
                         item['diff'] = int((diff_refs + (diff_scraps * 11) / 100) * 100) / 100
                         item['trade_offer_link'] = description['data-listing_offers_url']
+
+                        print(item)
+
                         compared_items.append(item)
                         count += 1
                     else:
@@ -174,6 +200,7 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_price_ref) -
 
 
 if __name__ == "__main__":
+    print_key_price_n_price_cap()
     # Creating browser object
     options = webdriver.ChromeOptions()
     options.headless = True
@@ -185,4 +212,4 @@ if __name__ == "__main__":
     except():
         print("Error")
     finally:
-        driver.close()
+        driver.quit()

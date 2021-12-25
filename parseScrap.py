@@ -1,3 +1,4 @@
+import math
 from enum import Enum
 from selenium import webdriver
 from bs4 import BeautifulSoup as Bs
@@ -8,7 +9,9 @@ import cookieOperations as Cop
 # 1 - Strange Hats
 # 2 - Higher-Value Hats
 # 3 - Craft Hats
-category_number = 1
+category_number = 2
+# Key selling price in ref (should be set as the buying price on scrap.tf (*Amount we pay them))
+key_buy_price_ref = 70.55
 
 
 class Quality(Enum):
@@ -108,10 +111,16 @@ def get_quality(number):
         return
 
 
-def parse_scrap(browser, category=category_number) -> list[dict]:
+def print_key_price_n_category():
+    print(f"parsing category = category-{category_number}")
+    print(f"key buying price ref = {key_buy_price_ref:.2f}")
+
+
+def parse_scrap(browser, category=category_number, key_price=key_buy_price_ref) -> list[dict]:
     """
     Parses Scrap.tf and then returns dictionary of items
 
+    :param key_price: Key selling price in ref (should be set as the buying price on scrap.tf (*Amount we pay them))
     :param category: category to parse on scrap.tf:
         0 - Recently Traded
         1 - Strange Hats
@@ -124,6 +133,7 @@ def parse_scrap(browser, category=category_number) -> list[dict]:
                 'name_base': item name without quality,
                 'price_scrap': price in scrap metal,
                 'price_scrap_ref': price in ref,
+                'price_scrap_full': full price in keys and refs,
                 'painted': paint name if painted,
                 'quality_name': quality name,
                 'quality': quality number,
@@ -135,6 +145,7 @@ def parse_scrap(browser, category=category_number) -> list[dict]:
                 'name_base': 'Mann of the Seven Sees',
                 'price_scrap': 15,
                 'price_scrap_ref': 1.66,
+                'price_scrap_full': '0 keys, 1.66 refs',
                 'painted': 'The Value of Teamwork',
                 'quality_name': 'Unique',
                 'quality': 6,
@@ -145,6 +156,7 @@ def parse_scrap(browser, category=category_number) -> list[dict]:
                 'name_base': 'Manndatory Attire',
                 'price_scrap': 271,
                 'price_scrap_ref': 30.11,
+                'price_scrap_full': '0 keys, 30.11 refs',
                 'painted': '',
                 'quality_name': 'Strange',
                 'quality': 11,
@@ -184,12 +196,21 @@ def parse_scrap(browser, category=category_number) -> list[dict]:
         metal = int(data_item_group_hash[1])
         scraps = metal % 9
         refs = (metal - scraps) / 9
+        ref_full = int((refs + (scraps * 11) / 100) * 100) / 100
+
+        keys = math.trunc(ref_full / key_price) if ref_full >= key_price else 0
+        diff_metal_for_keys = float(metal) - int(keys) * (math.trunc(float(key_price)) * 9 + int(
+            math.trunc((float(key_price) * 10)) % 10))
+        scraps_full_price = diff_metal_for_keys % 9
+        refs_full_price = (diff_metal_for_keys - scraps_full_price) / 9
+        ref_full_full_price = int((refs_full_price + (scraps_full_price * 11) / 100) * 100) / 100
 
         items.append({
             'name':             str(name if len(span) == 0 else span[0].contents[0]),
             'name_base':        str(name if len(span) == 0 else span[0].contents[0].split(' ', 1)[1]),
             'price_scrap':      metal,
-            'price_scrap_ref':  int((refs + (scraps * 11) / 100) * 100) / 100,
+            'price_scrap_ref':  ref_full,
+            'price_scrap_full': str(keys) + ' keys, ' + str(ref_full_full_price) + ' refs',
             'painted':          str('' if len(painted) == 0 else painted[0].removeprefix('Painted ')),
             'quality_name':     get_quality(dig_hash),
             'quality':          dig_hash,
@@ -199,6 +220,7 @@ def parse_scrap(browser, category=category_number) -> list[dict]:
 
 
 if __name__ == "__main__":
+    print_key_price_n_category()
     # Creating browser object
     options = webdriver.ChromeOptions()
     options.headless = True
@@ -210,4 +232,4 @@ if __name__ == "__main__":
     except():
         print("Error")
     finally:
-        driver.close()
+        driver.quit()
