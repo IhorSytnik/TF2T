@@ -3,6 +3,8 @@ import os
 
 from selenium import webdriver
 
+from helping.browser import BrowserGET
+
 
 def save_cookie(driver, path):
     """
@@ -17,7 +19,7 @@ def save_cookie(driver, path):
         json.dump(driver.get_cookies(), file_handler)
 
 
-def load_cookies(driver, path):
+def load_cookies(driver: BrowserGET, path):
     """
     Loads cookies into the web driver.
 
@@ -26,8 +28,25 @@ def load_cookies(driver, path):
     """
     with open(path, 'r') as cookies_file:
         cookies = json.load(cookies_file)
-    for cookie in cookies:
-        driver.add_cookie(cookie)
+    driver.load_cookies(cookies)
+
+
+def log_in_to_steam():
+    browser.get("https://steamcommunity.com/")
+    input()
+    save_cookie(browser, "cookies/cookiesSteam")
+
+
+def log_in_to_bp():
+    browser.get("https://backpack.tf/login") #  "https://backpacktf.trade/login" When backpack.tf is down they relocate to backpacktf.trade
+    input()
+    save_cookie(browser, "cookies/cookiesBackpack")
+
+
+def log_in_to_scrap():
+    browser.get("https://scrap.tf/login")
+    input()
+    save_cookie(browser, "cookies/cookiesScrap")
 
 
 if __name__ == '__main__':
@@ -38,16 +57,8 @@ if __name__ == '__main__':
     if not os.path.exists("cookies"):
         os.mkdir("cookies")
 
-    browser.get("https://scrap.tf/login")
-    input()
-    save_cookie(browser, "cookies/cookiesScrap")
-
-    browser.get("https://backpack.tf/login")
-    input()
-    save_cookie(browser, "cookies/cookiesBackpack")
-
-    browser.get("https://steamcommunity.com/")
-    input()
-    save_cookie(browser, "cookies/cookiesSteam")
+    log_in_to_steam()
+    log_in_to_bp()
+    log_in_to_scrap()
 
     browser.close()

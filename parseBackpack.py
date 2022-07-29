@@ -1,112 +1,104 @@
-import math
-from selenium import webdriver
+import sys
+from time import sleep
+
 from bs4 import BeautifulSoup as Bs
-import cookieOperations as Cop
+from bs4.element import ResultSet
+
+import cookieOperations
 import parseScrap
 import urllib.parse
 import re
 
-# Price cap in ref over which this parser can't go
-price_capacity = 1000
-# Key buying sell price in ref (should be set as the selling price on backpack.tf (*Amount they pay us))
-key_sell_price_ref = 70.00
+from classes.item import Offer, Item, PriceFull
+from helping.browser import BrowserGET, RequestsSessionBrowser
+from helping.exceptions import StatusCodeException
+from helping.item_prop import Paint
+from helping.operations import keys_ref_str_to_metal, get_metal_to_refs, get_keys_to_metal, get_refs_to_metal
+from helping.controlling import run_once
+from scrap_trade import trade_thread
+from settings import KEY_SELLING_PRICE_REF, SAFE_PILLOW, BLACKLIST
+
+driver: BrowserGET
+key_price_metal: int
 
 
-def print_key_price_n_price_cap():
-    scraps_cap = price_capacity % 9
-    refs_cap = (price_capacity - scraps_cap) / 9
-    ref_full_cap = int((refs_cap + (scraps_cap * 11) / 100) * 100) / 100
-
-    keys_cap = math.trunc(ref_full_cap / key_sell_price_ref) if ref_full_cap >= key_sell_price_ref else 0
-    diff_metal_cap_for_keys = float(price_capacity) - int(keys_cap) * (math.trunc(float(key_sell_price_ref)) * 9 + int(
-        math.trunc((float(key_sell_price_ref) * 10)) % 10))
-    scraps_cap_for_keys = diff_metal_cap_for_keys % 9
-    refs_cap_for_keys = (diff_metal_cap_for_keys - scraps_cap_for_keys) / 9
-    ref_full_cap_for_keys = int((refs_cap_for_keys + (scraps_cap_for_keys * 11) / 100) * 100) / 100
-
-    parseScrap.print_key_price_n_category()
-    print(f"price cap = {price_capacity} metal = {ref_full_cap:.2f} refs = {keys_cap} keys, "
-          f"{ref_full_cap_for_keys:.2f} refs")
-    print(f"key selling price ref = {key_sell_price_ref:.2f}")
+@run_once
+def get_key_price():
+    global key_price_metal
+    key_price_metal = keys_ref_str_to_metal(KEY_SELLING_PRICE_REF)
 
 
-def parse_backpack(browser, price_cap=price_capacity, key_price=key_sell_price_ref) -> list[dict]:
+def print_initial_parameters():
+    print(f"key selling price ref = {KEY_SELLING_PRICE_REF}")
+
+
+def parse_backpack(browser: BrowserGET, category) -> list[Item]:
     """
     Parses Backpack.tf, compares with data from Scrap.tf and then returns sorted dictionary of items that have a
     positive ( and not 0) difference in price
 
-    :param key_price: Key buying sell price in ref (should be set as the selling price on backpack.tf (*Amount they pay us))
-    :param price_cap: Price cap in ref over which this parser can't go
-    :param browser: WebDriver object
-    :return: compared_items - list of sorted by diff item dictionaries that looks like this:
-            item = {
-                'name': item name with quality,
-                'name_base': item name without quality,
-                'price_scrap': price in scrap metal on scrap.tf,
-                'price_scrap_ref': price in ref on scrap.tf,
-                'price_scrap_full': full price on scrap.tf in keys and refs,
-                'painted': paint name if painted,
-                'quality_name': quality name,
-                'quality': quality number,
-                'available': quantity of this item available on scrap.tf,
-                'price_backpack_keys': price in keys on backpack.tf,
-                'price_backpack_ref': price in refs on backpack.tf,
-                'diff': price differance between scrap.tf and backpack.tf prices,
-                'trade_offer_link': trade offer link of the profitable backpack.tf listing
-            }
-        Examples:
-            item_1 = {
-                'name': 'Two Punch Mann',
-                'name_base': 'Two Punch Mann',
-                'price_scrap': 27,
-                'price_scrap_ref': 3.0,
-                'price_scrap_full': '0 keys, 3.0 refs',
-                'painted': '',
-                'quality_name': 'Unique',
-                'quality': 6,
-                'available': '4',
-                'price_backpack_keys': 0,
-                'price_backpack_refs': '3.11',
-                'diff': 0.11,
-                'trade_offer_link': 'https://steamcommunity.com/tradeoffer/new/LINKLINKLINK'
-            }
+    :param category:
+    :param browser: BrowserGET object
+    :return: compared_items - list of sorted by diff items
     """
+    get_key_price()
+
+    bp_url = 'backpack.tf'  # they relocate the web-site when their server has issues or something
+    print_initial_parameters()
     # Loading saved cookies
-    browser.get("https://backpack.tf")
-    Cop.load_cookies(browser, "cookies/cookiesBackpack")
+    browser.get(f"https://{bp_url}")
+    cookieOperations.load_cookies(browser, "cookies/cookiesBackpack")
     compared_items = []
 
     # For loop for each scrap.tf item that a list from parseScrap.parse_scrap(browser) function has
-    for item in parseScrap.parse_scrap(browser):
-
-        # We don't buy/sell items with keys yet
-        if float(item['price_scrap_ref']) > price_cap:
-            continue
+    for item in parseScrap.parse_scrap(browser, category=category):
 
         # Making item name string appropriate for url format
-        url = urllib.parse.quote_plus(item['name_base'])
+        name_base_url = urllib.parse.quote_plus(item.name_base)
 
-        end_one = False
+        end_flag = False
         count = 0
         page_num = 1
-        available = int(item['available'])
+        available = item.available
+        available_safe_pillow = available + SAFE_PILLOW
+        offers = []
 
         # While loop that works for as many iterations as many of the same items available on scrap.tf
         # Breaks if there is no listings to parse or if the difference in prices is less then one (1) scrap
         # (if price on scrap.tf is more than the price on backpack.tf)
-        while count < available:
+        while not end_flag and count < available_safe_pillow:
 
-            if end_one:
-                break
-            browser.get(f"https://backpack.tf/classifieds?page={page_num}&item={url}&quality={item['quality']}"
-                        f"&tradable=1&craftable=1&australium=-1&killstreak_tier=0")
+            link = f"https://{bp_url}/classifieds?page={page_num}&item={name_base_url}&" \
+                   f"quality={item.quality.get_index()}&tradable=1&craftable={1 if item.craftable else -1}" \
+                   f"&australium=-1&killstreak_tier=0&paint={item.painted.get_bp_code()}&offers=1"
+            # sys.stdout.write("\r{0}".format(link))
+            # sys.stdout.flush()
 
-            item_list = Bs(browser.page_source, 'html.parser') \
-                .find('main', attrs={"id": "page-content"}) \
-                .find_all('div', attrs={"class": "row"})[1] \
-                .find_all('div', attrs={"class": "col-md-6"})[1] \
-                .find('ul', attrs={"class": "media-list"}) \
-                .find_all('li', attrs={"class": "listing"})
+            while True:
+                sleep(0.66)
+                try:
+                    # Gets all sell offers with the "lightning" button
+                    item_list: ResultSet = Bs(browser.get_page_source(), 'html.parser') \
+                        .find_all('ul', attrs={"class": "media-list"})[1] \
+                        .find_all('i', attrs={"class": "fa-flash"})
+                    # item_list: ResultSet = Bs(browser.get_page_source(), 'html.parser') \
+                    #     .find('span', text="Buy Orders") \
+                    #     .parent.parent \
+                    #     .find('ul', attrs={"class": "media-list"}) \
+                    #     .find_all('i', attrs={"class": "fa-flash"})
+                    if 600 > browser.get_status_code() >= 500:
+                        continue
+                    elif browser.get_status_code() == 426:
+                        sleep(2)
+                        continue
+                    else:
+                        raise StatusCodeException()
+                except AttributeError as e:
+                    print(browser.get_status_code())
+                    continue
+                except IndexError as e:
+                    print(browser.get_status_code())
+                    continue
 
             if not item_list:
                 break
@@ -114,101 +106,71 @@ def parse_backpack(browser, price_cap=price_capacity, key_price=key_sell_price_r
             # For loop for each listing
             # Breaks if there are no more available items
             for item_li in item_list:
-                if count >= available:
+                if count >= available_safe_pillow or end_flag:
                     break
-                item_tag = list(filter(lambda e: e != "\n",
-                                       item_li.find_all('i', attrs={"class": "fa-flash"})))
-                if item_tag:
-                    description = item_li.find('div', attrs={"class": "listing-item"}) \
-                        .find('div')
-                    if description.has_attr('data-quality_elevated'):
-                        continue
-                    if item['painted']:
-                        if description.has_attr('data-paint_name'):
-                            if description['data-paint_name'] != item['painted']:
-                                continue
-                        else:
-                            continue
-                    elif description.has_attr('data-paint_name'):
-                        continue
-                    keys = 0
-                    refs = 0
-                    price_str = description['data-listing_price']
-                    price = re.findall("(\d+\.\d+)|(\d+)", price_str)
 
-                    if len(price) == 2:
-                        if not price[0][0] and price[0][1]:
-                            keys = price[0][1]
-                        elif not price[0][0] and not price[0][1]:
-                            pass
-                        else:
-                            continue
-                        if price[1][0] and not price[1][1]:
-                            refs = price[1][0]
-                        elif not price[1][0] and price[1][1]:
-                            refs = price[1][1]
-                        elif not price[1][0] and not price[1][1]:
-                            pass
-                        else:
-                            continue
-                    elif len(price) == 0:
-                        pass
-                    elif len(price) == 1:
-                        first, *middle, last = price_str.split()
-                        if last == "key" or last == "keys":
-                            if not price[0][0] and price[0][1]:
-                                keys = price[0][1]
-                            elif not price[0][0] and not price[0][1]:
-                                pass
-                            else:
-                                continue
-                        elif last == "ref":
-                            if price[0][0] and not price[0][1]:
-                                refs = price[0][0]
-                            elif not price[0][0] and price[0][1]:
-                                refs = price[0][1]
-                            elif not price[0][0] and not price[0][1]:
-                                pass
-                            else:
-                                continue
-                    else:
-                        continue
+                # Gets the parent[4] of the "lightning" button tag and then the item's description
+                li_listing = item_li.parent.parent.parent.parent.parent
+                description = li_listing.find('div', attrs={"class": "listing-item"}) \
+                                        .find('div')
 
-                    diff_metal = int(keys) * (math.trunc(float(key_price)) * 9 +
-                        int(math.trunc((float(key_price) * 10)) % 10)) + \
-                        math.trunc(float(refs)) * 9 + \
-                        int(math.trunc((float(refs) * 10)) % 10) - \
-                        float(item['price_scrap'])
+                price_str = description['data-listing_price']
+                price_keys = re.findall(r'(\d+) key', price_str)
+                price_ref = re.findall(r'(\d+\.\d+|\d+) ref', price_str)
+                keys = 0 if not price_keys else int(price_keys[0])
+                refs = 0. if not price_ref else float(price_ref[0])
+                bp_metal = get_keys_to_metal(keys, key_price_metal) + get_refs_to_metal(refs)
+                diff_metal = bp_metal - item.price_scrap
+                print(diff_metal)
 
-                    if diff_metal >= 1:
-                        diff_scraps = diff_metal % 9
-                        diff_refs = (diff_metal - diff_scraps) / 9
+                if diff_metal <= 0:
+                    end_flag = True
+                    break
 
-                        item['price_backpack_keys'] = keys
-                        item['price_backpack_refs'] = refs
-                        item['diff'] = int((diff_refs + (diff_scraps * 11) / 100) * 100) / 100
-                        item['trade_offer_link'] = description['data-listing_offers_url']
+                if description.has_attr('data-quality_elevated') or \
+                        description['data-listing_account_id'] in BLACKLIST:
+                    continue
+                elif description.has_attr('data-paint_name'):
+                    continue
 
-                        print(item)
-
-                        compared_items.append(item)
-                        count += 1
-                    else:
-                        end_one = True
+                offers.append(Offer(
+                    price_backpack=         PriceFull(
+                                                keys=keys,
+                                                refs=refs
+                                            ),
+                    price_backpack_metal=   bp_metal,
+                    diff_metal=             diff_metal,
+                    diff_ref=               get_metal_to_refs(diff_metal),
+                    steam_id=               li_listing.find('a', attrs={"class": "user-link"})['data-id'],
+                    trade_id=               re.findall(r'partner=(\d+)&', description['data-listing_offers_url'])[0],
+                    trade_token=            re.findall(r'token=(.*)', description['data-listing_offers_url'])[0],
+                    trade_offer_link=       description['data-listing_offers_url']
+                ))
+                count += 1
             page_num += 1
-    return sorted(compared_items, key=lambda k: k['diff'])
+        if len(offers) >= 2:
+            item.offers = offers
+            print(link)
+            print(offers[0].diff_metal)
+            print(item)
+            trade_thread(item)
+            compared_items.append(item)
+    return sorted(compared_items, key=lambda i: i.offers[0].diff_metal)
 
 
 if __name__ == "__main__":
-    print_key_price_n_price_cap()
+
     # Creating browser object
-    options = webdriver.ChromeOptions()
-    options.headless = True
-    driver = webdriver.Chrome(options=options)
+    driver = RequestsSessionBrowser()
+    # driver = SeleniumChromeWebDriverBrowser()
+    cookieOperations.load_cookies(driver, "cookies/cookiesSteam")
 
     try:
-        for it in parse_backpack(driver):
-            print(it)
+        # for trade_category in range(3, 0, -1):
+        for trade_category in range(1, 4):
+            for it in parse_backpack(driver, category=trade_category):
+                print(it)
+                pass
     except():
         print("Error")
     finally:
