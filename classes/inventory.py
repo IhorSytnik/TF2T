@@ -17,6 +17,19 @@ class Inventory:
         self._init_start_inventory()
         self._write_currency()
 
+    def update_inventory(self, inventory_dict):
+        """
+
+        :param inventory_dict:
+        :return: **True** - if old inventory and new one are equal, **False** - otherwise.
+        """
+        if self.inventory['rgInventory'] != inventory_dict['rgInventory']:
+            self.inventory = inventory_dict
+            self._write_currency()
+            return True
+        else:
+            return False
+
     def _write_currency(self):
         inventory_values = self.get_rginventory().values()
         self.scraps = list(filter(lambda i: i['classid'] == Currencies.SCRAP.get_class_id(), inventory_values))
@@ -48,11 +61,11 @@ class Inventory:
         :param def_indexes: list of items' asset ids
         :return: list of new items' asset ids.
         """
-        item_description = {k: v for k, v in self.get_rgdescriptions().items()
-                            if v['app_data']['def_index'] in def_indexes}
-        items = list(filter(lambda i: i['classid'] == item_description['classid'] and
-                                      i['instanceid'] == item_description['instanceid'] and
-                                      i not in self.start_inventory.values(),
+        item_ids = [(v['classid'], v['instanceid']) for v in self.get_rgdescriptions().values()
+                    if v['app_data']['def_index'] in def_indexes]
+        start_item_ids = [(v['classid'], v['instanceid']) for v in self.start_inventory.values()]
+        items = list(filter(lambda i: (i['classid'], i['instanceid']) in item_ids and
+                                      (i['classid'], i['instanceid']) not in start_item_ids,
                             self.get_rginventory().values()))
         return [item['id'] for item in items]
 

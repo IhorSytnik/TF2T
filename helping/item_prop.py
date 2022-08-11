@@ -68,7 +68,7 @@ class Quality(MultiValueEnum):
     GENUINE =       "Genuine",      1
     RARITY2 =       "rarity2",      2  # Unused
     VINTAGE =       "Vintage",      3
-    RARITY4 =       "rarity4",      4
+    RARITY4 =       "rarity4",      4  # Unused
     UNUSUAL =       "Unusual",      5
     UNIQUE =        "Unique",       6
     COMMUNITY =     "Community",    7

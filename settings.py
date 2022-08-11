@@ -1,12 +1,14 @@
+BP_URL = 'backpack.tf'  # they relocate the web-site when their server has issues or something
+
 # Key selling price in ref (should be set as the selling price on backpack.tf (*Amount they pay us))
-KEY_SELLING_PRICE_REF = '58.77'
+KEY_SELLING_PRICE_REF = '56.88'
 
 # An additional amount of buyers we can sell the item to
 SAFE_PILLOW = 2
 
 # Buyers we don't want to sell to
 BLACKLIST = [
-    '1217175197',  # wholesaler
+    # '1217175197',  # wholesaler
 ]
 
 # Category to parse on scrap.tf/hats:

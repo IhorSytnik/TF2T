@@ -5,18 +5,20 @@ import re
 import cookieOperations
 
 from classes.item import Item, PriceFull
-from helping.browser import BrowserGET, SeleniumChromeWebDriverBrowser, RequestsSessionBrowser
+from cookieOperations import load_scraptf_cookies
+from helping.browser import BrowserGET, session
 from helping.item_prop import Quality, Paint
 from helping.operations import keys_ref_str_to_metal, get_metal_to_refs, get_keys_to_metal
 from helping.controlling import run_once
 from settings import CATEGORY_NUMBER, PRICE_CAP
 
 
-driver: BrowserGET
 # Key buying price in ref (should be set as the buying price on scrap.tf (*Amount we pay them))
 key_price_ref: str
 key_price_metal: int
 scrap_bot_list = set()
+
+load_scraptf_cookies(session)
 
 
 @run_once
@@ -65,10 +67,6 @@ def parse_scrap(browser: BrowserGET, category=CATEGORY_NUMBER) -> list[Item]:
     """
     get_key_price(browser)
 
-    # Loading saved cookies
-    browser.get("https://scrap.tf")
-    cookieOperations.load_cookies(browser, "cookies/cookiesScrap")
-
     # Getting all item divs from the web site
     html = browser.go_to_and_get_source_get("https://scrap.tf/buy/hats")
     # html = browser.go_to_and_get_source_get("https://scrap.tf/buy/items")
@@ -109,17 +107,18 @@ def parse_scrap(browser: BrowserGET, category=CATEGORY_NUMBER) -> list[Item]:
                                 ),
             painted=            Paint('' if len(painted) == 0 else painted[0]),
             def_index=          item['data-defindex'],
+            category=           int(category),
             quality=            Quality(int(data_item_group_hash[3])),
             craftable=          'uncraft' not in str(item['class']).split(),
             available=          int(item['data-num-available']),
             bots=               get_bots_info(item),
-            offers=             list()
+            offers=             tuple()
         ))
     return items
 
 
 if __name__ == "__main__":
-    driver = RequestsSessionBrowser()
+    driver = session
     # driver = SeleniumChromeWebDriverBrowser()
 
     try:
