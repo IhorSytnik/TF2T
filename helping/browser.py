@@ -1,9 +1,31 @@
+import re
+
 from selenium.webdriver.chrome import webdriver
 import requests
 
 from classes.requestMethod import RequestMethod
 from helping.factories import Singleton
 from settings import HEADERS
+
+
+class RequestBuilder:
+    def __init__(self):
+        self.method = RequestMethod.GET
+        self.url = None
+        self.params = None
+        self.data = None
+        self.headers = HEADERS
+        self.cookies = None
+        self.files = None
+        self.auth = None
+        self.timeout = None
+        self.allow_redirects = True
+        self.proxies = None
+        self.hooks = None
+        self.stream = None
+        self.verify = None
+        self.cert = None
+        self.json = None
 
 
 class BrowserGET:
@@ -30,6 +52,9 @@ class BrowserGET:
     def get_status_code(self):
         """Returns a status code for the current request."""
         pass
+
+    def get_request_builder(self) -> RequestBuilder:
+        return RequestBuilder()
 
     def quit(self):
         """Shuts down the browser (call at the end)."""
@@ -76,9 +101,10 @@ class RequestsSessionBrowser(BrowserGET, metaclass=Singleton):
     def __init__(self, common_headers=HEADERS):
         self.session = requests.session()
         self.common_headers = common_headers
+        self.websites = {}
 
-    def request_with_prep(self, request_method: RequestMethod, url, **kwargs):
-        return self.request(request_method, url, headers=self.common_headers, **kwargs)
+    def request_with_prep(self, method: RequestMethod, url, **kwargs):
+        return self.request(method, url, headers=self.common_headers, **kwargs)
 
     def get(self, url) -> requests.Response:
         return self.request_with_prep(RequestMethod.GET, url)
@@ -86,8 +112,14 @@ class RequestsSessionBrowser(BrowserGET, metaclass=Singleton):
     def post(self, url) -> requests.Response:
         return self.request_with_prep(RequestMethod.POST, url)
 
-    def request(self, request_method: RequestMethod, url, **kwargs) -> requests.Response:
-        self.response = self.session.request(request_method.name, url, **kwargs)
+    def request(self, method: RequestMethod, url, **kwargs) -> requests.Response:
+        website = re.findall(r'^(https://[\w\-\.]+)/?.*$', url)[0]
+        if website not in self.websites:
+            self.websites[website] = 0
+        self.websites[website] += 1
+
+        self.response = self.session.request(method.name, url, **kwargs)
+        self.response.raise_for_status()
         return self.response
 
     def get_page_source(self):
@@ -99,8 +131,8 @@ class RequestsSessionBrowser(BrowserGET, metaclass=Singleton):
     def go_to_and_get_source_get(self, url):
         return self.go_to_and_get_source(RequestMethod.GET, url)
 
-    def go_to_and_get_source(self, request_method: RequestMethod, url):
-        self.request(request_method, url, headers=HEADERS)
+    def go_to_and_get_source(self, method: RequestMethod, url):
+        self.request_with_prep(method, url)
         return self.get_page_source()
 
     def load_cookies(self, cookies):

@@ -2,5 +2,13 @@ class NotLoggedInException(Exception):
     pass
 
 
-class StatusCodeException(Exception):
+class NotEnoughMetalException(Exception):
+    pass
+
+
+class OutdatedDataException(Exception):
+    pass
+
+
+class InventoryLoadingException(Exception):
     pass

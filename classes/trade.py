@@ -1,24 +1,22 @@
 import json
-import math
 import re
 
 import requests
 
 from helping.browser import session
-from classes.person import Person
 from classes.requestMethod import RequestMethod
-from helping.operations import scrap_to_ref_rec_scrap
+from helping.exceptions import NotEnoughMetalException
+from helping.operations import scrap_to_ref_rec_scrap, get_session_id
 from settings import TF2_APPID, tf2_PRIMARY_CONTEXTID
 from helping.currencies import Currencies
-from classes.person import Partner
+from classes.person import Partner, Me
 from classes.inventory import Inventory
 
 
 class Trade:
-    def __init__(self, session_id: str, me: Person, partner: Partner):
+    def __init__(self, me: Me, partner: Partner):
         self.partner = partner
         self.me = me
-        self.session_id = session_id
         # b'{"tradeofferid":str, "needs_mobile_confirmation":boolean, "needs_email_confirmation":boolean,
         # "email_domain":str(ex:"gmail.com")}'
         self.trade_offer_info = None
@@ -59,7 +57,7 @@ class Trade:
             "trade_offer_access_token": self.partner.trade_token,
         }
         form = {  # y
-            "sessionid": self.session_id,
+            "sessionid": get_session_id(),
             "serverid": 1,
             "partner": self.partner.steam_id,
             "tradeoffermessage": '',
@@ -74,13 +72,13 @@ class Trade:
     def send_trade(self, my_item_list: list[tuple],
                    partners_item_list: list[tuple]) -> requests.Response:
         response = session.request(RequestMethod.POST, "https://steamcommunity.com/tradeoffer/new/send",
-                                data=self.__make_form(my_item_list, partners_item_list),
-                                headers={
-                                    'Referer': f'https://steamcommunity.com/tradeoffer/new/'
-                                               f'?partner={self.partner.trade_partner_id}'
-                                               f'&token={self.partner.trade_token}'
-                                }
-                                )
+                                   data=self.__make_form(my_item_list, partners_item_list),
+                                   headers={
+                                       'Referer': f'https://steamcommunity.com/tradeoffer/new/'
+                                                  f'?partner={self.partner.trade_partner_id}'
+                                                  f'&token={self.partner.trade_token}'
+                                   }
+                                   )
         self.trade_offer_info = response.json()
         return response
 
@@ -144,7 +142,6 @@ class Trade:
             partner_item_list.extend(self.__get_metal_for_trade_enough(price, partner_inv))
         return partner_item_list, my_item_list
 
-    # todo count currency
     def sell(self, price_metal: int, item_asset_id: list[tuple[str, int]]) -> requests.Response:
         """
         Note: sells only one item.
@@ -153,7 +150,7 @@ class Trade:
         :return:
         """
         if self.partner.inventory.count_currency()['metal'] < price_metal:
-            raise Exception("Partner doesn't have enough metal.")
+            raise NotEnoughMetalException("Partner doesn't have enough metal.")
         partners_item_list = []
         my_item_list = item_asset_id
         refs, recs, scraps = scrap_to_ref_rec_scrap(price_metal)
@@ -216,7 +213,7 @@ class Trade:
         self.trade_items = {"me": me, "them": them}
         return self.trade_items
 
-    def __count_metal(self, trade_list: list, key_price) -> int:
+    def __count_metal(self, trade_list: list, key_price: int) -> int:
         count = 0
         for item in trade_list:
             if item["def_index"] == Currencies.SCRAP.get_def_index():
@@ -226,16 +223,17 @@ class Trade:
             if item["def_index"] == Currencies.REFINED.get_def_index():
                 count += 9
             if item["def_index"] == Currencies.KEY.get_def_index():
-                count += (math.trunc(float(key_price)) * 9 + int(
-                    math.trunc((float(key_price) * 10)) % 10))
+                # count += (math.trunc(float(key_price)) * 9 + int(
+                #     math.trunc((float(key_price) * 10)) % 10))
+                count += key_price
         return count
 
-    # todo SUPPORTS ONLY ONE ITEM TO BUY
-    def get_transaction_details(self, tradeoffer_id: str, key_price=0) -> dict:
+    # todo SUPPORTS ONLY ONE ITEM TO BE BOUGHT
+    def get_transaction_details(self, tradeoffer_id: str, key_price: int = 0) -> dict:
         """
 
         :param tradeoffer_id:
-        :param key_price:
+        :param key_price: key price in metal
         :return:
         {
             "me": price in metal (int),
@@ -256,61 +254,61 @@ class Trade:
     def accept(self, tradeoffer_id: str):
         request_url = f"https://steamcommunity.com/tradeoffer/{tradeoffer_id}/accept"
         form = {
-            "sessionid": self.session_id,
+            "sessionid": get_session_id(),
             "serverid": 1,
             "tradeofferid": tradeoffer_id,
             "partner": self.partner.steam_id,
             # "captcha": ""
         }
         return session.request(RequestMethod.POST, request_url,
-        #                     {
-        #     'form': form,
-        #     'json': True,
-        #     'headers': {
-        #         'Referer': f'https://steamcommunity.com/tradeoffer/{tradeoffer_id}/',
-        #         'Host': 'steamcommunity.com',
-        #         'Connection': 'keep-alive',
-        #         'Content-Length': '104',
-        #         'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="97", "Chromium";v="97"',
-        #         'Accept': '*/*',
-        #         'DNT': '1',
-        #         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        #         'sec-ch-ua-mobile': '?0',
-        #         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-        #                       '(KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
-        #         'sec-ch-ua-platform': "Windows",
-        #         'Origin': 'https://steamcommunity.com',
-        #         'Sec-Fetch-Site': 'same-origin',
-        #         'Sec-Fetch-Mode': 'cors',
-        #         'Sec-Fetch-Dest': 'empty',
-        #         'Accept-Encoding': 'gzip, deflate, br',
-        #         'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,ru-RU;q=0.7,ru;q=0.6,uk;q=0.5'
-        #     },
-        #     'checkJsonError': False,
-        #     'checkHttpError': False
-        # }
-                            data=form,
-                            json=True,
-                            headers={
-                                'Referer': f'https://steamcommunity.com/tradeoffer/{tradeoffer_id}/',
-                                'Host': 'steamcommunity.com',
-                                # 'Connection': 'keep-alive',
-                                # 'Content-Length': '104',
-                                # 'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="97", "Chromium";v="97"',
-                                # 'Accept': '*/*',
-                                # 'DNT': '1',
-                                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                                # 'sec-ch-ua-mobile': '?0',
-                                # 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                                #               '(KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
-                                # 'sec-ch-ua-platform': "Windows",
-                                # 'Origin': 'https://steamcommunity.com',
-                                # 'Sec-Fetch-Site': 'same-origin',
-                                # 'Sec-Fetch-Mode': 'cors',
-                                # 'Sec-Fetch-Dest': 'empty',
-                                # 'Accept-Encoding': 'gzip, deflate, br',
-                                # 'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,ru-RU;q=0.7,ru;q=0.6,uk;q=0.5'
-                            }
-                            # checkJsonError=False,
-                            # checkHttpError=False  # we'll check it ourself. Some trade offer errors return HTTP 500
-                            )
+                               #                     {
+                               #     'form': form,
+                               #     'json': True,
+                               #     'headers': {
+                               #         'Referer': f'https://steamcommunity.com/tradeoffer/{tradeoffer_id}/',
+                               #         'Host': 'steamcommunity.com',
+                               #         'Connection': 'keep-alive',
+                               #         'Content-Length': '104',
+                               #         'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="97", "Chromium";v="97"',
+                               #         'Accept': '*/*',
+                               #         'DNT': '1',
+                               #         'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                               #         'sec-ch-ua-mobile': '?0',
+                               #         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                               #                       '(KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
+                               #         'sec-ch-ua-platform': "Windows",
+                               #         'Origin': 'https://steamcommunity.com',
+                               #         'Sec-Fetch-Site': 'same-origin',
+                               #         'Sec-Fetch-Mode': 'cors',
+                               #         'Sec-Fetch-Dest': 'empty',
+                               #         'Accept-Encoding': 'gzip, deflate, br',
+                               #         'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,ru-RU;q=0.7,ru;q=0.6,uk;q=0.5'
+                               #     },
+                               #     'checkJsonError': False,
+                               #     'checkHttpError': False
+                               # }
+                               data=form,
+                               json=True,
+                               headers={
+                                   'Referer': f'https://steamcommunity.com/tradeoffer/{tradeoffer_id}/',
+                                   'Host': 'steamcommunity.com',
+                                   # 'Connection': 'keep-alive',
+                                   # 'Content-Length': '104',
+                                   # 'sec-ch-ua': '" Not;A Brand";v="99", "Google Chrome";v="97", "Chromium";v="97"',
+                                   # 'Accept': '*/*',
+                                   # 'DNT': '1',
+                                   'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                                   # 'sec-ch-ua-mobile': '?0',
+                                   # 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                                   #               '(KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
+                                   # 'sec-ch-ua-platform': "Windows",
+                                   # 'Origin': 'https://steamcommunity.com',
+                                   # 'Sec-Fetch-Site': 'same-origin',
+                                   # 'Sec-Fetch-Mode': 'cors',
+                                   # 'Sec-Fetch-Dest': 'empty',
+                                   # 'Accept-Encoding': 'gzip, deflate, br',
+                                   # 'Accept-Language': 'en-GB,en-US;q=0.9,en;q=0.8,ru-RU;q=0.7,ru;q=0.6,uk;q=0.5'
+                               }
+                               # checkJsonError=False,
+                               # checkHttpError=False  # we'll check it ourself. Some trade offer errors return HTTP 500
+                               )

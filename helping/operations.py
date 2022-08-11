@@ -5,6 +5,9 @@ import bs4
 
 
 # Conversions and other currency operations
+from helping.browser import session
+
+
 def keys_ref_str_to_metal(key_price_str: str) -> int:
     r = re.findall(r'(\d+)\.', key_price_str)
     if len(r) > 0:
@@ -60,3 +63,7 @@ def get_by_xpath_beautifulsoup_full(text: str, xpath: str) -> bs4.Tag:
         search = search.findChildren(name[0], recursive=False)[int(num[0]) - 1 if num else 0]
         list_tag_num.append({"name": name[0], "num": int(num[0]) if num else 0})
     return search
+
+
+def get_session_id():
+    return re.findall(r'g_sessionID = "(.*)"', session.get('https://steamcommunity.com').text)
