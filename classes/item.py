@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from helping.item_prop import Quality, Paint
+from helping.itemProp import Quality, Paint
 
 
 @dataclass

@@ -7,7 +7,7 @@ import cookieOperations
 from classes.item import Item, PriceFull
 from cookieOperations import load_scraptf_cookies
 from helping.browser import BrowserGET, session
-from helping.item_prop import Quality, Paint
+from helping.itemProp import Quality, Paint
 from helping.operations import keys_ref_str_to_metal, get_metal_to_refs, get_keys_to_metal
 from helping.controlling import run_once
 from settings import CATEGORY_NUMBER, PRICE_CAP

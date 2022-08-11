@@ -13,7 +13,7 @@ from cookieOperations import load_bptf_cookies
 from helping.browser import BrowserGET, session
 from helping.operations import keys_ref_str_to_metal, get_metal_to_refs, get_keys_to_metal, get_refs_to_metal
 from helping.controlling import run_once
-from scrap_trade import trade_thread
+from scrapTrade import trade_thread
 from settings import KEY_SELLING_PRICE_REF, SAFE_PILLOW, BLACKLIST, BP_URL
 
 key_price_metal: int
